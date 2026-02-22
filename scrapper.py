@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 import json
 import time
 import random
+import os
 
 
 def build_url(location, query, radius, next_from):
@@ -10,59 +11,78 @@ def build_url(location, query, radius, next_from):
     return f"https://in.indeed.com/jobs?{urlencode(params)}"
 
 
-def scrape_data(location, query, radius, limit, filename):
-    limit_count = limit * 10
-    all_jobs_for_this_query = []  # Store everything here to avoid overwriting
+def scrape_data(location_list, query, radius, pages_per_loc, filename):
+    print(f"\n>>>> STARTING GLOBAL SEARCH FOR: {query} <<<<")
+    all_jobs_for_this_query = []
 
-    for i in range(0, limit_count, 10):
-        # LAUNCH browser inside the loop so it survives the IP change
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
-            context = browser.new_context()
-            page = context.new_page()
+    for loc in location_list:
+        print(f"\n--- Moving to Location: {loc} ---")
+        limit_count = pages_per_loc * 10
 
-            try:
-                encoded_url = build_url(location, query, radius, i)
-                print(f"\n--- Scraping {query} | Start: {i} ---")
-                page.goto(encoded_url, wait_until="domcontentloaded", timeout=60000)
+        for i in range(0, limit_count, 10):
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=False)
+                context = browser.new_context()
+                page = context.new_page()
 
-                # Give Indeed a moment to verify you aren't a bot
-                time.sleep(random.uniform(5, 8))
+                try:
+                    encoded_url = build_url(loc, query, radius, i)
+                    print(f"  [Page {i // 10 + 1}] Target: {loc} | Start: {i}")
 
-                job_cards = page.locator(".job_seen_beacon")
-                count = job_cards.count()
+                    page.goto(encoded_url, wait_until="load", timeout=60000)
+                    time.sleep(random.uniform(5, 8))
 
-                for j in range(count):
-                    try:
-                        card = job_cards.nth(j)
-                        card.scroll_into_view_if_needed(timeout=3000)
-                        card.click()
-
-                        # Human-like reading time
-                        time.sleep(random.uniform(12, 18))
-
-                        page.wait_for_selector(".jobsearch-HeaderContainer", timeout=5000)
-
-                        job = {
-                            "header": page.locator(".jobsearch-HeaderContainer").all_inner_texts(),
-                            "description": page.locator(".jobsearch-JobComponent-description").all_inner_texts()
-                        }
-                        all_jobs_for_this_query.append(job)
-                        print(f"  [+] Saved job {len(all_jobs_for_this_query)}")
-
-                    except Exception as e:
-                        print(f"  [!] Skipping job {j}: {e}")
+                    # Check for "No jobs found" or Captcha
+                    if "hcaptcha" in page.content().lower() or "cloudflare" in page.content().lower():
+                        print("  [!] Blocked by Cloudflare. Cooling down...")
+                        time.sleep(120)  # Extra long rest if blocked
                         continue
 
-                # Save progress after every page so you don't lose data if it crashes
-                with open(f"{filename}.json", "w", encoding="utf-8") as f:
-                    json.dump(all_jobs_for_this_query, f, indent=4)
+                    job_cards = page.locator(".job_seen_beacon")
+                    count = job_cards.count()
 
-            finally:
-                browser.close()  # Close browser BEFORE changing IP
+                    if count == 0:
+                        print(f"  [?] No more jobs found for {loc}. Moving to next location.")
+                        break
 
-            print(f"\n[PAUSE] Finished page {i // 10 + 1}.")
-            input(">>> Toggle Airplane Mode on your phone, then press Enter to continue...")
+                    for j in range(count):
+                        try:
+                            card = job_cards.nth(j)
+                            card.scroll_into_view_if_needed(timeout=3000)
+                            card.click()
+
+                            time.sleep(random.uniform(12, 18))
+
+                            page.wait_for_selector(".jobsearch-HeaderContainer", timeout=5000)
+
+                            job = {
+                                "header": page.locator(".jobsearch-HeaderContainer").all_inner_texts(),
+                                "description": page.locator(".jobsearch-JobComponent-description").all_inner_texts()
+                            }
+                            all_jobs_for_this_query.append(job)
+                            print(f"    [+] Total Collected: {len(all_jobs_for_this_query)}")
+
+                        except Exception as e:
+                            continue
+
+                    save_data(all_jobs_for_this_query, filename)
+
+                finally:
+                    browser.close()
+
+                wait_time = random.uniform(30, 60)
+                print(f"  [Rest] Sleeping for {wait_time:.1f}s before next page...")
+                time.sleep(wait_time)
+
+
+def save_data(all_jobs, filename):
+    directory = "data"
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    file_path = os.path.join(directory, f"{filename}.json")
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(all_jobs, f, indent=4, ensure_ascii=False)
+    print(f"Successfully saved to: {file_path}")
 
 
 if __name__ == "__main__":
@@ -71,6 +91,7 @@ if __name__ == "__main__":
         ("AI ML Engineer", "ai-ml-jobs"),
         ("ML Engineer", "ml-jobs")
     ]
+
     locations = [
         "Thiruvananthapuram, Kerala",
         "Kochi, Kerala",
@@ -80,6 +101,7 @@ if __name__ == "__main__":
     ]
 
     for title, fname in roles:
-        scrape_data("Thiruvananthapuram, Kerala", title, 100, 5, fname)
-        print(f"--- Completed role: {title} ---")
-        input(">>> HUGE IP CHANGE: Toggle Airplane Mode and press Enter for the next role...")
+        scrape_data(locations, title, 100, 1, fname)
+        long_wait = random.uniform(60, 120)
+        print(f"\n>>> ROLE COMPLETED: {title}. Deep rest for {long_wait:.1f}s...")
+        time.sleep(long_wait)
