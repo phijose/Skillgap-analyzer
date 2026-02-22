@@ -9,7 +9,7 @@ def scrape_data(location, query, radius, limit, filename):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
-        
+
         for i in range(0, limit, 10):
             encoded_url = build_url(location, query, radius, i)
             page.goto(encoded_url)
@@ -20,7 +20,7 @@ def scrape_data(location, query, radius, limit, filename):
                 try:
                     job_cards.nth(j).scroll_into_view_if_needed(timeout=3000)
                     job_cards.nth(j).click()
-                    time.sleep(random.uniform(10, 15))
+                    time.sleep(random.uniform(6, 15))
                     page.wait_for_selector(".jobsearch-HeaderContainer", timeout=3000)
                     job = {
                         "header": page.locator(".jobsearch-HeaderContainer").all_inner_texts(),
@@ -36,14 +36,13 @@ def scrape_data(location, query, radius, limit, filename):
             }
             with open(f"{filename}.json", "w") as f:
                 json.dump(data, f, indent=4)
-            time.sleep(random.uniform(30, 60))
-            input("Have you change your IP: ")
-        time.sleep(random.uniform(30, 60))
-        input("Have you change your IP: ")
+    time.sleep(random.uniform(10, 20))
+
 
 def extract_data(page):
     # everything has its time
     pass
+
 
 def build_url(location, query, radius, next_from):
     params = {
