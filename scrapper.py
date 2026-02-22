@@ -1,24 +1,8 @@
-import json
-import random
-import time
+from playwright.sync_api import sync_playwright
 from urllib.parse import urlencode
-from seleniumbase import SB
-
-# --- TOR ROTATION (Keep if you still want to try Tor) ---
-from stem import Signal
-from stem.control import Controller
-
-
-def renew_tor_ip():
-    """Requests a new Tor IP. Note: Indeed heavily blocks Tor exit nodes."""
-    try:
-        with Controller.from_port(port=9051) as controller:
-            controller.authenticate()
-            controller.signal(Signal.NEWNYM)
-            print("  [Tor] New Identity Requested")
-            time.sleep(3)
-    except Exception:
-        print("  [Tor] Could not rotate (Is Tor running?)")
+import json
+import time
+import random
 
 
 def build_url(location, query, radius, next_from):
@@ -27,55 +11,75 @@ def build_url(location, query, radius, next_from):
 
 
 def scrape_data(location, query, radius, limit, filename):
-    print(f"\n>>> Starting SeleniumBase Scrape: {query}")
-    all_job_list = []
     limit_count = limit * 10
+    all_jobs_for_this_query = []  # Store everything here to avoid overwriting
 
-    with SB(uc=True, test=True, locale_code="en") as sb:
-        for i in range(0, limit_count, 10):
-            # 1. New Identity (If using Tor)
-            renew_tor_ip()
+    for i in range(0, limit_count, 10):
+        # LAUNCH browser inside the loop so it survives the IP change
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
 
-            # 2. Open Page with Reconnect (Essential for Cloudflare)
-            url = build_url(location, query, radius, i)
-            sb.uc_open_with_reconnect(url, reconnect_time=5)
+            try:
+                encoded_url = build_url(location, query, radius, i)
+                print(f"\n--- Scraping {query} | Start: {i} ---")
+                page.goto(encoded_url, wait_until="domcontentloaded", timeout=60000)
 
-            # 3. FIXED: Human Scrolling
-            print("  Scrolling to load results...")
-            for _ in range(3):
-                sb.execute_script(f"window.scrollBy(0, {random.randint(400, 800)});")
-                sb.sleep(1)
+                # Give Indeed a moment to verify you aren't a bot
+                time.sleep(random.uniform(5, 8))
 
-            # 4. Extract Job IDs
-            job_links = sb.find_elements("a[data-jk]")
-            job_ids = list(set([el.get_attribute("data-jk") for el in job_links]))
+                job_cards = page.locator(".job_seen_beacon")
+                count = job_cards.count()
 
-            for jk in job_ids:
-                sb.sleep(random.uniform(5, 12))  # Look like you're reading
+                for j in range(count):
+                    try:
+                        card = job_cards.nth(j)
+                        card.scroll_into_view_if_needed(timeout=3000)
+                        card.click()
 
-                job_url = f"https://in.indeed.com/viewjob?jk={jk}"
-                sb.uc_open_with_reconnect(job_url, reconnect_time=4)
+                        # Human-like reading time
+                        time.sleep(random.uniform(12, 18))
 
-                if sb.is_element_visible("#jobDescriptionText"):
-                    all_job_list.append({
-                        "job_id": jk,
-                        "title": sb.get_text("h1"),
-                        "description": sb.get_text("#jobDescriptionText")
-                    })
-                    print(f"    Saved: {jk}")
+                        page.wait_for_selector(".jobsearch-HeaderContainer", timeout=5000)
 
-        # 5. Save Progress
-        with open(f"{filename}.json", "w", encoding="utf-8") as f:
-            json.dump(all_job_list, f, indent=4)
+                        job = {
+                            "header": page.locator(".jobsearch-HeaderContainer").all_inner_texts(),
+                            "description": page.locator(".jobsearch-JobComponent-description").all_inner_texts()
+                        }
+                        all_jobs_for_this_query.append(job)
+                        print(f"  [+] Saved job {len(all_jobs_for_this_query)}")
+
+                    except Exception as e:
+                        print(f"  [!] Skipping job {j}: {e}")
+                        continue
+
+                # Save progress after every page so you don't lose data if it crashes
+                with open(f"{filename}.json", "w", encoding="utf-8") as f:
+                    json.dump(all_jobs_for_this_query, f, indent=4)
+
+            finally:
+                browser.close()  # Close browser BEFORE changing IP
+
+            print(f"\n[PAUSE] Finished page {i // 10 + 1}.")
+            input(">>> Toggle Airplane Mode on your phone, then press Enter to continue...")
 
 
 if __name__ == "__main__":
     roles = [
         ("AI Engineer", "ai-jobs"),
-        ("AI ML Engineer", "ai-ml-jobs")
+        ("AI ML Engineer", "ai-ml-jobs"),
+        ("ML Engineer", "ml-jobs")
+    ]
+    locations = [
+        "Thiruvananthapuram, Kerala",
+        "Kochi, Kerala",
+        "Chennai, Tamil Nadu",
+        "Bengaluru, Karnataka",
+        "Hyderabad, Telangana"
     ]
 
     for title, fname in roles:
-        scrape_data("Thiruvananthapuram, Kerala", title, 100, 2, fname)
-        # Big wait between different job categories
-        time.sleep(random.uniform(20, 45))
+        scrape_data("Thiruvananthapuram, Kerala", title, 100, 5, fname)
+        print(f"--- Completed role: {title} ---")
+        input(">>> HUGE IP CHANGE: Toggle Airplane Mode and press Enter for the next role...")
