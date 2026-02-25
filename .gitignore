@@ -11,3 +11,6 @@ downloaded_files/
 
 # Virtual environments
 .venv
+
+latest_logs/
+.idea/
