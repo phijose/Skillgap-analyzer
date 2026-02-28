@@ -50,4 +50,5 @@ st.markdown(f"""
 ### Job Specification
 ```yaml
 {yaml.dump(sample_object, sort_keys=False)}
+```
 """)
