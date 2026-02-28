@@ -11,7 +11,9 @@ dependencies = [
     "langchain-openai>=1.1.10",
     "playwright>=1.58.0",
     "playwright-stealth>=2.0.2",
+    "psycopg2-binary>=2.9.11",
     "seleniumbase>=4.47.0",
+    "sqlmodel>=0.0.37",
     "stem>=1.8.2",
     "streamlit>=1.54.0",
 ]
@@ -22,3 +24,12 @@ build-backend = "setuptools.build_meta"
 where = ["."]
 include = ["*"]
 exclude = ["data*", "latest_logs*", "downloaded_files*", ".idea*", ".venv*", ".vscode*", "tests*"]
+[tool.poe.tasks]
+sg-ui = "uv run streamlit run ./src/frontend/main.py"
+n-mdl = "uv run ./src/models/normalize_model.py"
+s-mdl = "uv run ./src/models/structure_model.py"
+db-rn = "uv run streamlit run src/schema/main.py"
+[dependency-groups]
+dev = [
+    "poethepoet>=0.42.0",
+]
