@@ -29,6 +29,7 @@ sg-ui = "uv run streamlit run ./src/frontend/main.py"
 n-mdl = "uv run ./src/models/normalize_model.py"
 s-mdl = "uv run ./src/models/structure_model.py"
 db-rn = "uv run streamlit run src/schema/main.py"
+ld-js = "uv run streamlit run src/db_loader.py"
 [dependency-groups]
 dev = [
     "poethepoet>=0.42.0",
