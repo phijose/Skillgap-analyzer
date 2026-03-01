@@ -1,9 +1,15 @@
 import streamlit as st
 import yaml
+from src.schema.main import get_db_store
+from src.utils import initial_trigger
+import threading
+
+db_store = get_db_store()
 
 def analyze_callback():
     st.balloons()
     pass
+
 
 st.set_page_config("Skillgap Analyzer", page_icon="🤹")
 st.title("SkillGap Analyzer")
@@ -52,3 +58,8 @@ st.markdown(f"""
 {yaml.dump(sample_object, sort_keys=False)}
 ```
 """)
+
+def run_background():
+    initial_trigger(db_store)
+
+threading.Thread(target=run_background, daemon=True).start()

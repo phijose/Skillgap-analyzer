@@ -1,14 +1,11 @@
-import os, json
-from pathlib import Path
-from dotenv import load_dotenv
 from typing import List
 from pydantic import BaseModel, Field
 from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-from langchain_openai import ChatOpenAI
-from src.utils import save_json
-
-load_dotenv(dotenv_path=Path().cwd().joinpath(".env"))
+from src.models.base_chain_model import BaseChainModel
+from src.schema.main import get_db_store
+from src.schema.schema import NormalizedData
+from src.utils import get_llm
+import streamlit as st
 
 class NormaliseJob(BaseModel):
     tech_skills: List[str] = Field(
@@ -36,63 +33,35 @@ class NormaliseJob(BaseModel):
         )
     )
 
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
-
-parser = JsonOutputParser(pydantic_object=NormaliseJob)
+llm = get_llm("gpt")
 
 prompt = PromptTemplate(
     template="""
-Normalize and deduplicate the following structured JSON job data.
-
-Rules:
-- Remove duplicates (including semantic duplicates).
-- Use canonical industry names (e.g., AI → Artificial Intelligence).
-- Use proper casing.
-- Do not add new information.
-- Keep categories unchanged.
-- Output strictly in the required JSON format.
-
-Input:
-{uncleaned_text}
-
-{format_instructions}
-""",
-    input_variables=["uncleaned_text"],
-    partial_variables={"format_instructions": parser.get_format_instructions()}
+    Normalize and deduplicate the following structured JSON job data.
+    
+    Rules:
+    - Remove duplicates (including semantic duplicates).
+    - Use canonical industry names (e.g., AI → Artificial Intelligence).
+    - Use proper casing.
+    - Do not add new information.
+    - Keep categories unchanged.
+    - Output strictly in the required JSON format.
+    
+    Input:
+    {input_text}
+    
+    {format_instructions}
+    """,
+    input_variables=["input_text"]
 )
 
-chain = prompt | llm | parser
+exclude_data = {"id"}
 
-def clean_extracted_data(record, chain):
-    text_to_process = json.dumps(record, indent=2)
-    normalised_data = chain.invoke({"uncleaned_text", text_to_process})
-    try:
-        save_json(normalised_data, "normalised_data")
-        print(normalised_data)
-        normalised_data.append(normalised_data)
-        print(f"  [✓] Processed: {normalised_data.get('title')}")
-    except Exception as e:
-        print(f"  [!] Failed to process a record: {e}")
+@st.cache_resource
+def get_normalized_chain():
+    db_store = get_db_store()
+    return BaseChainModel(llm, NormaliseJob, prompt, NormalizedData, exclude_data, db_store)
 
-
-if __name__ == "__main__":
-    record = {
-        "responsibilities": [
-            "Manage the technical scope of a project in line with requirements at all stages",
-            "Gather information from various sources and interpret patterns and trends",
-            "Develop record management process and policies",
-            "Provide sales data, proposals, data insights, and account reviews to clients",
-            "Identify areas to increase efficiency and automation of processes",
-            "Set up and maintain automated data processes",
-            "Analyze complex data sets and prepare reports for internal and external audiences",
-            "Create data dashboards, graphs, and visualization to showcase business performance",
-            "Mine and analyze large datasets and present insights to management"
-        ],
-        "tech_skills": [
-            "AI",
-            "Artificial Intelligence"
-        ],
-        "tools_and_platforms": [],
-        "soft_skills": [],
-    }
-    clean_extracted_data(record, chain)
+def make_normalized_data(mapper, connection, target):
+    norm_model = get_normalized_chain()
+    norm_model.invoke(target, copy_base=True)
