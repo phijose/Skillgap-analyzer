@@ -4,7 +4,7 @@ from langchain_core.prompts import PromptTemplate
 from src.models.base_chain_model import BaseChainModel
 from src.schema.main import get_db_store
 from src.schema.schema import StructuredData
-from src.utils import get_llm
+from src.utils.util import get_llm
 import streamlit as st
 
 class JobStructure(BaseModel):
