@@ -2,6 +2,7 @@ from sqlalchemy import event, exists
 from sqlmodel import SQLModel, Session, select
 import streamlit as st
 from src.schema.schema import RawData, StructuredData, NormalizedData, PredictedData
+from src.utils.util import get_embedding_model
 
 
 class DBStore:
@@ -9,10 +10,20 @@ class DBStore:
         self.conn = st.connection('sql')
         self.engine = self.conn.engine
         self.__init_db()
-        from src.models.normalize_model import make_normalized_data
-        from src.models.structure_model import make_structured_data
-        event.listen(RawData, 'after_insert', make_structured_data)
-        event.listen(StructuredData, 'after_insert', make_normalized_data)
+
+    def getdata_by_similarity(self, entity, query_text, location, limit=10):
+        embedding_model = get_embedding_model()
+        query_vector = embedding_model.embed_query(query_text)
+        with Session(self.engine) as session:
+            stmt = select(entity)
+            if location != "All Locations":
+                stmt = stmt.where(entity.location == location)
+            stmt = (
+                stmt
+                .order_by(entity.embedding.l2_distance(query_vector))
+                .limit(limit)
+            )
+            return session.exec(stmt).all()
 
     def insert_data(self, new_data):
         with Session(self.engine) as session:

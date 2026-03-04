@@ -1,8 +1,9 @@
 import os
 import json
+import re
 from pathlib import Path
-from langchain_ollama import OllamaLLM
-from langchain_openai import ChatOpenAI
+from langchain_ollama import OllamaLLM, OllamaEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from dotenv import load_dotenv
 from src.schema.schema import RawData, StructuredData
 
@@ -34,6 +35,24 @@ def initial_trigger(db_store):
     for data in raw_data:
         struct_chain.invoke(data)
 
+def normalize_experience(text: str) -> str:
+    text = text.strip().lower()
+    if "fresher" in text:
+        return "Fresher"
+    if "not specified" in text:
+        return "N/A"
+    numbers = re.findall(r"\d+", text)
+    if numbers:
+        min_year = min(map(int, numbers))
+        return f"{min_year}+ years"
+    return "N/A"
+
+def get_embedding_model(model="llama"):
+    model = "llama"
+    if model == "gpt":
+        return OpenAIEmbeddings(model="text-embedding-3-small")
+    else:
+        return OllamaEmbeddings(model="nomic-embed-text")
 
 def get_llm(model="llama"):
     model="gpt"

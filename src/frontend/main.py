@@ -1,65 +1,15 @@
 import streamlit as st
-import yaml
-from src.schema.main import get_db_store
-from src.utils import initial_trigger
-import threading
+from sqlalchemy import event
+from src.models.normalize_model import make_normalized_data
+from src.models.structure_model import make_structured_data
+from src.schema.schema import RawData, StructuredData
 
-db_store = get_db_store()
+event.listen(RawData, 'after_insert', make_structured_data)
+event.listen(StructuredData, 'after_insert', make_normalized_data)
 
-def analyze_callback():
-    st.balloons()
-    pass
+analysis = st.Page("analysis_page.py", title="Job Analyzer", icon="🤹")
+scrapper = st.Page("scrap_page.py", title="Job Scrapper", icon="⛏️")
+resume_sr = st.Page("resume_score.py", title="Resume Analyzer", icon="🧑‍🏫")
 
-
-st.set_page_config("Skillgap Analyzer", page_icon="🤹")
-st.title("SkillGap Analyzer")
-st.text_input("Job Title", key="job_title")
-left_col, right_col = st.columns(2)
-left_col.text_input("Location", key="location")
-right_col.text_input("Experiance", key="experiance")
-right_col.container(horizontal_alignment="right").button("Analyze", on_click=analyze_callback)
-sample_object = {
-    "title": "AI ENGINEER",
-    "employer": "Wipro Limited",
-    "location": "Bengaluru, Karnataka",
-    "salary": "Not Specified",
-    "category": [
-        "MLOps",
-        "Generative AI"
-    ],
-    "domain": "Technology Services and Consulting",
-    "job_type": "Full-time",
-    "responsibilities": [
-        "Manage the technical scope of a project in line with requirements at all stages",
-        "Gather information from various sources and interpret patterns and trends",
-        "Develop record management process and policies",
-        "Provide sales data, proposals, data insights, and account reviews to clients",
-        "Identify areas to increase efficiency and automation of processes",
-        "Set up and maintain automated data processes",
-        "Analyze complex data sets and prepare reports for internal and external audiences",
-        "Create data dashboards, graphs, and visualization to showcase business performance",
-        "Mine and analyze large datasets and present insights to management"
-    ],
-    "tech_skills": [
-        "AI",
-        "Artificial Intelligence"
-    ],
-    "tools_and_platforms": [],
-    "yrs_of_exp": "3-5 Years",
-    "education": "Not Specified",
-    "soft_skills": [],
-    "certification": [],
-    "deadline": "Not Specified"
-}
-
-st.markdown(f"""
-### Job Specification
-```yaml
-{yaml.dump(sample_object, sort_keys=False)}
-```
-""")
-
-def run_background():
-    initial_trigger(db_store)
-
-threading.Thread(target=run_background, daemon=True).start()
+ui = st.navigation([resume_sr, analysis, scrapper])
+ui.run()

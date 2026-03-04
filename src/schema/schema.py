@@ -1,7 +1,6 @@
 import uuid
-
 from typing import List
-
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import Computed, func, text
 from sqlmodel import SQLModel, Field, Column, JSON, Text
 
@@ -19,7 +18,7 @@ class RawData(SQLModel, table=True):
         )
 
 class StructuredData(SQLModel, table=True):
-    id:uuid.UUID = Field(default_factory=uuid.uuid4, foreign_key="rawdata.id", primary_key=True)
+    id:uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     title: str
     employer: str
     location: str
@@ -37,7 +36,7 @@ class StructuredData(SQLModel, table=True):
     deadline: str
 
 class NormalizedData(SQLModel, table=True):
-    id:uuid.UUID = Field(default_factory=uuid.uuid4, foreign_key="structureddata.id" ,primary_key=True)
+    id:uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     title: str
     employer: str
     location: str
@@ -53,6 +52,7 @@ class NormalizedData(SQLModel, table=True):
     soft_skills: List[str] = Field(default=[], sa_column=Column(JSON))
     certification: List[str] = Field(default=[], sa_column=Column(JSON))
     deadline: str
+    embedding: List[float] | None = Field(default=None, sa_column=Column(Vector(768)))
 
 class PredictedData(SQLModel, table=True):
     id:uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)

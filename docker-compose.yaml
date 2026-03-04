@@ -1,14 +1,15 @@
 services:
   db:
-    image: postgres:16
+#    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: db_store
     restart: unless-stopped
     environment:
       POSTGRES_USER: pguser
       POSTGRES_PASSWORD: pgsecretpass
       POSTGRES_DB: skillgap_db
-#    volumes:
-#      - postgres_data:/var/lib/postgresql/data
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
